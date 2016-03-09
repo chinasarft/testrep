@@ -551,20 +551,26 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
   if (fSubsession.rtpSource() != NULL && !fSubsession.rtpSource()->hasBeenSynchronizedUsingRTCP()) {
     envir() << "!"; // mark the debugging output to indicate that this presentation time is not RTCP-synchronized
   }
+  /*@TODO myrtmp存放sps pps, 2.sdp的时候就过来了，可是直接发送应该*/
    switch (nUnitType) {
            case 0x1:
 		   envir()<<" TYPE:NIDR ";
+		   SendH264Packet(fReceiveBuffer,frameSize,0,0);
                    break;
            case 0x5:
+		   SendH264Packet(fReceiveBuffer,frameSize,1,0);
 		   envir()<<" TYPE:IDR ";
                    break;
            case 0x6:
+		   SendH264Packet(fReceiveBuffer,frameSize,0,0);
 		   envir()<<" TYPE:SEI ";
                    break;
            case 0x7:
+		   SendH264Packet(fReceiveBuffer,frameSize,0,0);
 		   envir()<<" TYPE:SPS ";
                    break;
            case 0x8:
+		   SendH264Packet(fReceiveBuffer,frameSize,0,0);
 		   envir()<<" TYPE:PPS ";
                    break;
            default:
