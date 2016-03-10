@@ -1,0 +1,2 @@
+rtmp://192.168.95.129:1935/live1/mypub
+ rtsp://10.10.10.100:554/cam/realmonitor?channel=1&subtype=1&unicast=true&proto=Onvif

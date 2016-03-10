@@ -95,6 +95,7 @@ public:
   int SendH264Packet(unsigned char *data,unsigned int size,int bIsKeyFrame,unsigned int nTimeStamp);
   int SendVideoSpsPps(unsigned char *pps,int pps_len,unsigned char * sps,int sps_len);
   int SendPacket(unsigned int nPacketType,unsigned char *data,unsigned int size,unsigned int nTimestamp);
+  myrtmp();
 };
 myrtmp grtmp;
 
@@ -555,22 +556,24 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
    switch (nUnitType) {
            case 0x1:
 		   envir()<<" TYPE:NIDR ";
-		   SendH264Packet(fReceiveBuffer,frameSize,0,0);
+		   grtmp.SendH264Packet(fReceiveBuffer,frameSize,0,0);
                    break;
            case 0x5:
-		   SendH264Packet(fReceiveBuffer,frameSize,1,0);
+		   grtmp.SendH264Packet(fReceiveBuffer,frameSize,1,0);
 		   envir()<<" TYPE:IDR ";
                    break;
            case 0x6:
-		   SendH264Packet(fReceiveBuffer,frameSize,0,0);
+		   grtmp.SendH264Packet(fReceiveBuffer,frameSize,0,0);
 		   envir()<<" TYPE:SEI ";
                    break;
            case 0x7:
-		   SendH264Packet(fReceiveBuffer,frameSize,0,0);
+                   grtmp.metaData.nSpsLen = frameSize;  
+                   memcpy(grtmp.metaData.Sps,fReceiveBuffer,frameSize);
 		   envir()<<" TYPE:SPS ";
                    break;
            case 0x8:
-		   SendH264Packet(fReceiveBuffer,frameSize,0,0);
+                   grtmp.metaData.nPpsLen = frameSize; 
+                   memcpy(grtmp.metaData.Pps,fReceiveBuffer,frameSize);
 		   envir()<<" TYPE:PPS ";
                    break;
            default:
@@ -602,6 +605,12 @@ Boolean DummySink::continuePlaying() {
 }
 
 //myrtmp
+myrtmp::myrtmp(){
+  metaData.Sps=(unsigned char*)malloc(1000);
+  metaData.Pps=(unsigned char*)malloc(1000);
+  memset( metaData.Sps, 0, 1000);
+  memset( metaData.Pps, 0, 1000);
+}
 bool myrtmp::RTMP264_Connect(const char* url)  
 {  
 
