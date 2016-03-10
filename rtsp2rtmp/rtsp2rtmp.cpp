@@ -63,11 +63,12 @@ UsageEnvironment& operator<<(UsageEnvironment& env, const MediaSubsession& subse
 }
 
 void usage(UsageEnvironment& env, char const* progName) {
-  env << "Usage: " << progName << " <rtsp-url> <rtmp-url>\n";
+  env << "Usage: " << progName << " <rtsp-url> [rtmp-url]\n";
 }
 
 char eventLoopWatchVariable = 0;
 
+#define TIMEVAL_TO_TS(t) (((t).tv_sec) * (long long int)1000 + ((t).tv_usec) / 1000)
 
 //定义包头长度，RTMP_MAX_HEADER_SIZE=18
 #define RTMP_HEAD_SIZE   (sizeof(RTMPPacket)+RTMP_MAX_HEADER_SIZE)
@@ -95,19 +96,43 @@ public:
   int SendH264Packet(unsigned char *data,unsigned int size,int bIsKeyFrame,unsigned int nTimeStamp);
   int SendVideoSpsPps(unsigned char *pps,int pps_len,unsigned char * sps,int sps_len);
   int SendPacket(unsigned int nPacketType,unsigned char *data,unsigned int size,unsigned int nTimestamp);
+  int isInitMetaData;
+  int isInitSps;
   myrtmp();
 };
 myrtmp grtmp;
+int rtmp_flag = 0;
+int InitSockets()    
+{    
+	#ifdef WIN32     
+		WORD version;    
+		WSADATA wsaData;    
+		version = MAKEWORD(1, 1);    
+		return (WSAStartup(version, &wsaData) == 0);    
+	#else     
+		return TRUE;    
+	#endif     
+}
 
+inline void CleanupSockets()    
+{    
+	#ifdef WIN32     
+		WSACleanup();    
+	#endif     
+}  
 
 int main(int argc, char** argv) {
-  grtmp.RTMP264_Connect(argv[2]);
+  if(argv[2] != NULL){
+    rtmp_flag = 1;
+    grtmp.RTMP264_Connect(argv[2]);
+  }
   // Begin by setting up our usage environment:
   TaskScheduler* scheduler = BasicTaskScheduler::createNew();
   UsageEnvironment* env = BasicUsageEnvironment::createNew(*scheduler);
 
   // We need at least one "rtsp://" URL argument:
-  if (argc < 3) {
+  if (argc != 2 && argc != 3) {
+	  printf("argc = %d\n", argc);
     usage(*env, argv[0]);
     return 1;
   }
@@ -553,33 +578,51 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
     envir() << "!"; // mark the debugging output to indicate that this presentation time is not RTCP-synchronized
   }
   /*@TODO myrtmp存放sps pps, 2.sdp的时候就过来了，可是直接发送应该*/
-   switch (nUnitType) {
-           case 0x1:
-		   envir()<<" TYPE:NIDR ";
-		   grtmp.SendH264Packet(fReceiveBuffer,frameSize,0,0);
-                   break;
-           case 0x5:
-		   grtmp.SendH264Packet(fReceiveBuffer,frameSize,1,0);
-		   envir()<<" TYPE:IDR ";
-                   break;
-           case 0x6:
-		   grtmp.SendH264Packet(fReceiveBuffer,frameSize,0,0);
-		   envir()<<" TYPE:SEI ";
-                   break;
-           case 0x7:
-                   grtmp.metaData.nSpsLen = frameSize;  
-                   memcpy(grtmp.metaData.Sps,fReceiveBuffer,frameSize);
-		   envir()<<" TYPE:SPS ";
-                   break;
-           case 0x8:
-                   grtmp.metaData.nPpsLen = frameSize; 
-                   memcpy(grtmp.metaData.Pps,fReceiveBuffer,frameSize);
-		   envir()<<" TYPE:PPS ";
-                   break;
-           default:
-                   envir()<<" TYPE:"<<nUnitType<<" ";
-
-  }
+   if(strcmp(fSubsession.codecName(), "H264") == 0){
+      switch (nUnitType) {
+              case 0x1:
+           	   envir()<<" TYPE:NIDR[ "<< frameSize << " ] ";
+           	   if(rtmp_flag) 
+           	     grtmp.SendH264Packet(fReceiveBuffer,frameSize,0,TIMEVAL_TO_TS(presentationTime));
+                      break;
+              case 0x5:
+           	   envir()<<" TYPE:IDR[ "<< frameSize << " ] ";
+           	   if(rtmp_flag) 
+           	     grtmp.SendH264Packet(fReceiveBuffer,frameSize,1,TIMEVAL_TO_TS(presentationTime));
+                      break;
+              case 0x6:
+           	   //if(rtmp_flag) grtmp.SendH264Packet(fReceiveBuffer,frameSize,0,0);
+           	   envir()<<" TYPE:SEI [" << frameSize << " ] ";
+                      break;
+              case 0x7:
+                      if(rtmp_flag){
+           	     grtmp.metaData.nSpsLen = frameSize;  
+                        memcpy(grtmp.metaData.Sps,fReceiveBuffer,frameSize);
+           	     if(!grtmp.isInitMetaData){
+                          int width = 0,height = 0, fps=0;  
+           	       	h264_decode_sps(grtmp.metaData.Sps,grtmp.metaData.nSpsLen,width,height,fps);
+           	       grtmp.isInitSps = 1;
+           	       if(fps)
+           	         grtmp.metaData.nFrameRate = fps; 
+           	       else
+           	         grtmp.metaData.nFrameRate = 25;
+           	     }
+           	   }
+           	   envir()<<" TYPE:SPS[ "<< grtmp.metaData.nSpsLen<< " "<< frameSize << " ] ";
+                      break;
+              case 0x8:
+                      if(rtmp_flag){
+           	     grtmp.metaData.nPpsLen = frameSize; 
+                        memcpy(grtmp.metaData.Pps,fReceiveBuffer,frameSize);
+                      }
+           	   if(grtmp.isInitSps) grtmp.isInitMetaData = 1;
+           	   envir()<<" TYPE:PPS[ "<< grtmp.metaData.nPpsLen<< " "<< frameSize << " ] ";
+                      break;
+              default:
+                      envir()<<" TYPE:"<<nUnitType;
+ 
+      }
+   }
    for(j = 0; j < 10; j++){
         envir()<<tohex(fReceiveBuffer[j])<<" ";
    }
@@ -610,6 +653,9 @@ myrtmp::myrtmp(){
   metaData.Pps=(unsigned char*)malloc(1000);
   memset( metaData.Sps, 0, 1000);
   memset( metaData.Pps, 0, 1000);
+  isInitMetaData = 0;
+  isInitSps = 0;
+  InitSockets();
 }
 bool myrtmp::RTMP264_Connect(const char* url)  
 {  
