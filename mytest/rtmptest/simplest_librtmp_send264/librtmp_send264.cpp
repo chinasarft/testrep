@@ -676,7 +676,7 @@ got_sps_pps:
 		bKeyframe  = (naluUnit.type == 0x05) ? TRUE : FALSE;
 		tick +=tick_gap;
 		now=RTMP_GetTime();
-		msleep(tick_gap-now+last_update);  
+		//msleep(tick_gap-now+last_update);  //可以不用sleep,tcp也能自己滑动窗口来解决
 		//msleep(40);
 	}  
 	end:
