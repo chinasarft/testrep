@@ -89,6 +89,7 @@ typedef struct _RTMPMetadata
 } RTMPMetadata,*LPRTMPMetadata;  
 class myrtmp{
 public:
+  myrtmp();
   char * m_rtmpUrl;
   RTMP* m_pRtmp; 
   RTMPMetadata metaData;  
@@ -98,7 +99,10 @@ public:
   int SendPacket(unsigned int nPacketType,unsigned char *data,unsigned int size,unsigned int nTimestamp);
   int isInitMetaData;
   int isInitSps;
-  myrtmp();
+  int fps;
+  int isBased;
+  time_t      base;
+  time_t      last_sec;
 };
 myrtmp grtmp;
 int rtmp_flag = 0;
@@ -566,6 +570,10 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
 				  struct timeval presentationTime, unsigned /*durationInMicroseconds*/) {
   int j;
   short nUnitType = static_cast<short> (fReceiveBuffer[0]) & 0x1f;
+  if(grtmp.isBased == 1){
+    
+    presentationTime.tv_sec -= grtmp.base;
+  }
   // We've just received a frame of data.  (Optionally) print out information about it:
 #ifdef DEBUG_PRINT_EACH_RECEIVED_FRAME
   if (fStreamId != NULL) envir() << "Stream \"" << fStreamId << "\"; ";
@@ -584,7 +592,7 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
            	   envir()<<" TYPE:NIDR[ "<< frameSize << " ] ";
            	   if(rtmp_flag) 
            	     grtmp.SendH264Packet(fReceiveBuffer,frameSize,0,TIMEVAL_TO_TS(presentationTime));
-                      break;
+                   break;
               case 0x5:
            	   envir()<<" TYPE:IDR[ "<< frameSize << " ] ";
            	   if(rtmp_flag) 
@@ -595,17 +603,23 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
            	   envir()<<" TYPE:SEI [" << frameSize << " ] ";
                       break;
               case 0x7:
-                      if(rtmp_flag){
+		   if(grtmp.isBased == -1){
+			grtmp.isBased = 1;
+			grtmp.base = presentationTime.tv_sec;
+			presentationTime.tv_sec = 0 ;
+		   }
+                   if(rtmp_flag){
            	     grtmp.metaData.nSpsLen = frameSize;  
                         memcpy(grtmp.metaData.Sps,fReceiveBuffer,frameSize);
            	     if(!grtmp.isInitMetaData){
-                          int width = 0,height = 0, fps=0;  
+                        int width = 0,height = 0, fps=0;  
            	       	h264_decode_sps(grtmp.metaData.Sps,grtmp.metaData.nSpsLen,width,height,fps);
-           	       grtmp.isInitSps = 1;
-           	       if(fps)
-           	         grtmp.metaData.nFrameRate = fps; 
-           	       else
-           	         grtmp.metaData.nFrameRate = 25;
+           	        grtmp.isInitSps = 1;
+			grtmp.fps = fps;
+           	        if(fps)
+           	          grtmp.metaData.nFrameRate = fps; 
+           	        else
+           	          grtmp.metaData.nFrameRate = 25;
            	     }
            	   }
            	   envir()<<" TYPE:SPS[ "<< grtmp.metaData.nSpsLen<< " "<< frameSize << " ] ";
@@ -630,7 +644,7 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
 #ifdef DEBUG_PRINT_NPT
   envir() << "\tNPT: " << fSubsession.getNormalPlayTime(presentationTime);
 #endif
-  envir() << "\n";
+  envir() << "fps"<<grtmp.fps<<"\n";
 #endif
   
   // Then continue, to request the next frame of data:
@@ -655,6 +669,7 @@ myrtmp::myrtmp(){
   memset( metaData.Pps, 0, 1000);
   isInitMetaData = 0;
   isInitSps = 0;
+  isBased = -1;
   InitSockets();
 }
 bool myrtmp::RTMP264_Connect(const char* url)  
