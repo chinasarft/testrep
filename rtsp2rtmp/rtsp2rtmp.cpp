@@ -23,12 +23,12 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #include "liveMedia.hh"
 #include "BasicUsageEnvironment.hh"
 /*librtmp*/
-#include "librtmp\rtmp.h"   
-#include "librtmp\rtmp_sys.h"   
-#include "librtmp\amf.h"  
+#include "librtmp/rtmp.h"   
+#include "librtmp/rtmp_sys.h"   
+#include "librtmp/amf.h"  
 #include "sps_decode.h"
 
-using namespace std;
+//using namespace std;
 
 // Forward function definitions:
 
@@ -535,7 +535,7 @@ StreamClientState::~StreamClientState() {
 
 // Even though we're not going to be doing anything with the incoming data, we still need to receive it.
 // Define the size of the buffer that we'll use:
-#define DUMMY_SINK_RECEIVE_BUFFER_SIZE 100000
+#define DUMMY_SINK_RECEIVE_BUFFER_SIZE 150000
 DummySink* DummySink::createNew(UsageEnvironment& env, MediaSubsession& subsession, char const* streamId) {
   return new DummySink(env, subsession, streamId);
 }
@@ -577,11 +577,14 @@ void DummySink::afterGettingFrame(unsigned frameSize, unsigned numTruncatedBytes
   // We've just received a frame of data.  (Optionally) print out information about it:
 #ifdef DEBUG_PRINT_EACH_RECEIVED_FRAME
   if (fStreamId != NULL) envir() << "Stream \"" << fStreamId << "\"; ";
-  envir() << fSubsession.mediumName() << "/" << fSubsession.codecName() << ":\tReceived " << frameSize << " bytes";
   if (numTruncatedBytes > 0) envir() << " (with " << numTruncatedBytes << " bytes truncated)";
+  envir() <<":\tRX " << frameSize << " bytes " << fSubsession.mediumName() << "/" << fSubsession.codecName() ;
   char uSecsStr[6+1]; // used to output the 'microseconds' part of the presentation time
   sprintf(uSecsStr, "%06u", (unsigned)presentationTime.tv_usec);
-  envir() << ".\tPresentation time: " << (int)presentationTime.tv_sec << "." << uSecsStr;
+  envir() << ".\tPts: " << (int)presentationTime.tv_sec << "." << uSecsStr;
+  envir() << "RTP SeqNum="<<fSubsession.rtpSource()->curPacketRTPSeqNum() << " RX num="<<
+  fSubsession.rtpSource()->receptionStatsDB().totNumPacketsReceived();
+
   if (fSubsession.rtpSource() != NULL && !fSubsession.rtpSource()->hasBeenSynchronizedUsingRTCP()) {
     envir() << "!"; // mark the debugging output to indicate that this presentation time is not RTCP-synchronized
   }
