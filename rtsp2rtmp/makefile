@@ -1,8 +1,8 @@
 CXX=g++
 CXXFLAGS = -g -DWIN32 -I../rtmpdump/ -I../live555/UsageEnvironment/include -I../live555/groupsock/include -I../live555/liveMedia/include -I../live555/BasicUsageEnvironment/include -I. -DSOCKLEN_T=int -DLOCALE_NOT_USED -D__MINGW32__
 #-Wall -Wno-deprecated
-LDFLAGS = -L. -L../live555/liveMedia  -L../live555/groupsock/ -L../live555/BasicUsageEnvironment -L../live555/UsageEnvironment -L../rtmpdump/librtmp
-LIBS = -lliveMedia -lgroupsock -lBasicUsageEnvironment -lUsageEnvironment -lrtmp -lws2_32 -lssl -lcrypto -lwinmm -lz
+LDFLAGS =-static -L. -L../live555/liveMedia  -L../live555/groupsock/ -L../live555/BasicUsageEnvironment -L../live555/UsageEnvironment -L../rtmpdump/librtmp
+LIBS = -lliveMedia -lgroupsock -lBasicUsageEnvironment -lUsageEnvironment -lrtmp  -lwinmm -lz  -lssl -lcrypto -lws2_32 -lgdi32
 
 a:rtsp2rtmp.o
 	$(CXX) $^ -o tran $(LDFLAGS) $(LIBS)
